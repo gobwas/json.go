@@ -196,6 +196,8 @@ func (self *Parser) scanArray() ([]interface{}, error) {
 			return array, nil
 		case COMMA:
 			continue
+		default:
+			return nil, fmt.Errorf("found %s %q, expected value", token.String(), token.Literal)
 		}
 	}
 
