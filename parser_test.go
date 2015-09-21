@@ -1,10 +1,11 @@
-package js
+package parser
 
 import (
 	"encoding/json"
 	"fmt"
 	"github.com/mgutz/ansi"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -42,7 +43,7 @@ func TestParseString(t *testing.T) {
 		},
 		{
 			`{"a": "a\b\r\t\n\f"}`,
-			map[string]interface{}{"a": `a\b\r\t\n\f`},
+			map[string]interface{}{"a": "a\b\r\t\n\f"},
 		},
 		{
 			`{"a":"ab'c"}`,
@@ -56,6 +57,10 @@ func TestParseString(t *testing.T) {
 			`{"a":3.141e-10}`,
 			map[string]interface{}{"a": float64(3.141e-10)},
 		},
+		//		{
+		//			`{"a":3.141eeee-+-10}`,
+		//			map[string]interface{}{"a": float64(3.141e-10)},
+		//		},
 		{
 			`{"a":12345123456789}`,
 			map[string]interface{}{"a": float64(12345123456789)},
@@ -93,13 +98,18 @@ func TestParseString(t *testing.T) {
 			`{"a":"\u2000\u20FF"}`,
 			map[string]interface{}{"a": "\u2000\u20ff"},
 		},
+		// this fall ok
+		//		{
+		//			"{\"a\":\"\u0001\"}",
+		//			map[string]interface{}{"a": "\u0000"},
+		//		},
 		{
 			`{"a":"foo://bar"}`,
 			map[string]interface{}{"a": `foo://bar`},
 		},
 		{
 			`{"\uafaf":"\uafaf"}`,
-			map[string]interface{}{"꾯": "꾯"},
+			map[string]interface{}{`꾯`: `꾯`},
 		},
 		{
 			`{"a":null}`,
@@ -119,7 +129,7 @@ func TestParseString(t *testing.T) {
 		},
 	} {
 		title := fmt.Sprintf("Should support parsing %q", test.String)
-		parsed, err := Parse(test.String)
+		parsed, err := ParseString(test.String)
 		if err != nil {
 			t.Error(red("✘ "+title) + "\n\n" + red(fmt.Sprintf("Could not parse %q: %s", test.String, err)) + "\n")
 			continue
@@ -127,8 +137,8 @@ func TestParseString(t *testing.T) {
 
 		if !reflect.DeepEqual(parsed, test.Result) {
 			message := "Expectation failed:"
-			expectation := fmt.Sprintf("expected: <%T> %#v", test.Result, test.Result)
-			actual := fmt.Sprintf("actual:   <%T> %#v", parsed, parsed)
+			expectation := fmt.Sprintf("expected: <%T> %#v (%t)", test.Result, test.Result, test.Result)
+			actual := fmt.Sprintf("actual:   <%T> %#v (%t)", parsed, parsed, parsed)
 
 			t.Error(red("✘ "+title) + "\n\n" + red(message) + "\n\t" + red(expectation) + "\n\t" + red(actual) + "\n\t")
 		} else {
@@ -142,31 +152,38 @@ var SmallJson = `{"a":"b", "c":[1,2,3], "d":{}}`
 
 func BenchmarkBig(t *testing.B) {
 	for i := 0; i < t.N; i++ {
-		if _, err := Parse(BigJson); err != nil {
-			t.Fatal(err)
-		}
-	}
-}
-func BenchmarkSmall(t *testing.B) {
-	for i := 0; i < t.N; i++ {
-		if _, err := Parse(SmallJson); err != nil {
+		if _, err := ParseString(BigJson); err != nil {
 			t.Fatal(err)
 		}
 	}
 }
 func BenchmarkBigNative(t *testing.B) {
 	for i := 0; i < t.N; i++ {
-		var to interface{}
-		if err := json.Unmarshal([]byte(BigJson), to); err != nil {
+		var to map[string]interface{}
+		if err := json.Unmarshal([]byte(BigJson), &to); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+func BenchmarkSmall(t *testing.B) {
+	for i := 0; i < t.N; i++ {
+		if _, err := ParseString(SmallJson); err != nil {
 			t.Fatal(err)
 		}
 	}
 }
 func BenchmarkSmallNative(t *testing.B) {
 	for i := 0; i < t.N; i++ {
-		var to interface{}
-		if err := json.Unmarshal([]byte(SmallJson), to); err != nil {
+		var to map[string]interface{}
+		if err := json.Unmarshal([]byte(SmallJson), &to); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func BenchmarkScanNumberSelf(t *testing.B) {
+	for i := 0; i < t.N; i++ {
+		scanner := NewScanner(strings.NewReader(`1.7976931348623157E3`))
+		scanner.scanNumber()
 	}
 }
